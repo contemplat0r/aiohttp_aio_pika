@@ -1,31 +1,35 @@
+import asyncio
+from datetime import datetime
+#from functools import partial
+
 from aiohttp import web
+import aio_pika
+import aiormq
 
-import aiohttp_jinja2
-import jinja2
+#loop = asyncio.get_running_loop()
 
-#aiohttp_jinja2.setup(
-#        app,
-#        loader=jinja2.PackageLoader('aiohttp_pools', 'templates')
-#    )
+async def send_message_to_worker(loop):
+    connection = await aio_pika.connect_robust(
+        'amqp://guest:guest@127.0.0.1',
+        loop=loop
+    )
 
-async def index(request):
+    async with connection:
+        routing_key = 'test_queue'
+        channel = await connection.channel()
+        await channel.default_exchange.publish(
+                aio_pika.Message(body="Hello {}, time is {}".format(routing_key, str(datetime.utcnow())).encode()),
+                routing_key=routing_key
+            )
+
+async def generate_index(request, loop=None):
+    await send_message_to_worker(loop)
     return web.Response(text="Hello Aiohttp!")
 
-async def send_message():
-    pass
 
-@aiohttp_jinja2.template('detail.html')
-async def pool(request):
-    async with request['db'].acquire() as conn:
-        question_id = request.match_info['question_id']
-        try:
-            question, choices = await db.get_question(
-                    conn,
-                    question_id
-                )
-        except db.RecordNotFound as e:
-            raise web.HTTPNotFound(text=str(e))
-        return {
-                'question': question,
-                'choices': choices
-            }
+#async def index(request):
+#    await send_message_to_worker(loop)
+#    return web.Response(text="Hello Aiohttp!")
+
+#async def send_message():
+#    pass
